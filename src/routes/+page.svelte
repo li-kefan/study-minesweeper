@@ -7,49 +7,82 @@
     collision = "💥",
   }
 
-  let _board_map = [...Array(size)].map(() => [...Array(size)].map(() => 0));
+  let _map = [...Array(size)].map(() => [...Array(size)].map(() => 0));
   const p = () => Math.floor(Math.random() * size);
   let bombs: Set<[number, number]> = new Set();
   let flag_map: Set<string> = new Set();
+  let _safe_map: Set<String> = new Set();
+  let board_map = _map.map((row) => row.map(() => ""));
 
   function generate() {
     console.log("generate...");
-    _board_map = [...Array(size)].map(() => [...Array(size)].map(() => 0));
-    bombs = new Set([...Array(5)].map(() => [p(), p()]));
-    bombs.forEach(([x, y]) => (_board_map[x][y] = -1));
+    flag_map.clear();
+    _safe_map.clear();
+    _map = [...Array(size)].map(() => [...Array(size)].map(() => 0));
+    bombs = new Set([...Array(size)].map(() => [p(), p()]));
+    bombs.forEach(([x, y]) => (_map[x][y] = -1));
     bombs.forEach(([x, y]) => {
       let _x = 0;
       let _y = 0;
-      for (let i = 0; i < 3; i++) {
-        _x = x - 1 + i;
-        if (_x < 0 || _x > 8) continue;
-        for (let j = 0; j < 3; j++) {
-          _y = y - 1 + j;
-          if (_y > 8 || _y < 0) continue;
-          let v = _board_map?.[_x]?.[_y];
-          if (v !== -1 && v !== undefined) _board_map[_x][_y]++;
+      for (let i = -1; i < 2; i++) {
+        _x = x + i;
+        for (let j = -1; j < 2; j++) {
+          _y = y + j;
+          let v = _map?.[_x]?.[_y];
+          if (v !== -1 && v !== undefined) _map[_x][_y]++;
         }
       }
     });
+    _map.forEach((row, x) => {
+      row.forEach((_, y) => {
+        board_map[x][y] = "";
+      });
+    });
+  }
+
+  let _show = true;
+  function show() {
+    _map.forEach((row, x) =>
+      row.forEach((val, y) => {
+        val != -1
+          ? (board_map[x][y] = _show ? val + "" : "")
+          : (board_map[x][y] = _show ? Content.collision : "");
+      })
+    );
+    _show = !_show;
+  }
+
+  function show_safe_cell(x: number, y: number) {
+    let v = _map?.[x]?.[y];
+    console.log(x, y);
+
+    if (v >= 0 && v != undefined) {
+      if (v != 0) {
+        // 不是空白格退出递归
+        board_map[x][y] = v + "";
+        _safe_map.add(`${x}-${y}`);
+        return;
+      }
+      board_map[x][y] = "0";
+
+      let _x = 0;
+      let _y = 0;
+      for (let i = -1; i < 2; i++) {
+        _x = x + i;
+        for (let j = -1; j < 2; j++) {
+          _y = y + j;
+          let _v = _map?.[_x]?.[_y];
+          if (_v == undefined) continue;
+          if (_x == x && _y == y) continue;
+          if (_safe_map.has(`${_x}-${_y}`)) continue;
+          _safe_map.add(`${_x}-${_y}`);
+          show_safe_cell(_x, _y);
+        }
+      }
+    }
   }
 
   generate();
-
-  let board_map = _board_map.map((row) => row.map(() => ""));
-
-  function show(content?: string) {
-    _board_map.forEach((row, x) =>
-      row.forEach((val, y) => {
-        if (typeof content == "string") {
-          board_map[x][y] = content;
-          return;
-        }
-        val != -1
-          ? (board_map[x][y] = val + "")
-          : (board_map[x][y] = Content.collision);
-      })
-    );
-  }
 </script>
 
 <svelte:head>
@@ -65,26 +98,39 @@
           class="w-10 h-10"
           on:click={(e) => {
             e.preventDefault();
-            const v = _board_map[x][y];
+            const v = _map[x][y];
             if (v == -1) {
+              alert("你踩雷了，游戏失败🥲。");
               show();
-              alert("游戏失败");
               return;
             }
-            board_map[x][y] = v + "";
+
+            show_safe_cell(x, y);
           }}
           on:contextmenu={(e) => {
             e.preventDefault();
-            board_map[x][y] = Content.flag;
-            flag_map.add(x+'-'+y);
+
+            let p = `[${x},${y}]`;
+            let cell = board_map[x][y];
+            if (cell == Content.flag) {
+              board_map[x][y] = "";
+              flag_map.delete(p);
+            } else {
+              board_map[x][y] = Content.flag;
+              flag_map.add(p);
+            }
+
             let win = true;
-            bombs.forEach((v1) => {
-              if (!flag_map.has(v1[0]+'-'+v1[1])) {
-                win = false
+            bombs.forEach(([_x, _y]) => {
+              if (!flag_map.has(`[${_x},${_y}]`)) {
+                win = false;
               }
             });
-
-            if (win) alert("你赢了！");
+            if (win) {
+              alert("恭喜，赢得胜利✌！");
+              flag_map.clear();
+              show();
+            }
           }}
         >
           {cell}
@@ -99,7 +145,6 @@
     class="btn"
     on:click={() => {
       generate();
-      show("");
     }}>重开</button
   >
   <button
